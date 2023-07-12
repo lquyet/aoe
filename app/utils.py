@@ -1,4 +1,4 @@
-from app.helpers import ActionType, MoveType, BuildAndDestroyType
+from app.helpers import ActionType, MoveType, BuildAndDestroyType, Side
 
 
 def mapping_from_key_list_to_action_type(action: ActionType, key_list: list):
@@ -30,3 +30,10 @@ def mapping_from_key_list_to_action_type(action: ActionType, key_list: list):
             return BuildAndDestroyType.BELOW
     else:
         return None
+
+
+def get_next_move(now: Side) -> Side:
+    if now == Side.A:
+        return Side.B
+    else:
+        return Side.A
