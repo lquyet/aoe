@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import time
 import tkinter as tk
 from typing import List
 
@@ -100,7 +101,15 @@ class MapController:
     def create_map(self):
         data = self._services.get_game_with_game_id()
         list_actions = self._services.get_game_actions_with_game_id()
-        status_data = self._services.get_game_status_with_game_id()
+        status_data = None
+        should_retry = True
+        while should_retry:
+            status_data = self._services.get_game_status_with_game_id()
+            if status_data.cur_turn is None and status_data.max_turn is None and status_data.remaining is None:
+                time.sleep(0.5)
+                print("retry")
+                continue
+            should_retry = False
 
         self._turn = status_data.cur_turn
         self._turn_text.config(text=f"Turn: {str(self._turn)}")
