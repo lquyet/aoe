@@ -5,10 +5,11 @@ import time
 import tkinter as tk
 from typing import List
 
-from app.helpers import State, Side, INIT_WIDTH, INFO_BOARD_WIDTH, ActionType, MoveType, INIT_HEIGHT, clean
-from app.map import Map
-from app.utils import mapping_from_key_list_to_action_type
-from map_components import CraftsManA
+from app.helpers.enums import State, Side, ActionType, MoveType
+from app.helpers.constants import INIT_WIDTH, INFO_BOARD_WIDTH, INIT_HEIGHT
+from app.maps.map import Map
+from app.helpers.utils import mapping_from_key_list_to_action_type
+from app.objects import CraftsmanA
 from models import GameActionsReq, GameResp, GameActionsResp
 from services import Service
 
@@ -17,12 +18,14 @@ class MapController:
 
     def __init__(self, window: tk.Tk, frame: tk.Frame, canvas: tk.Canvas):
         self._window: tk.Tk = window
+        self._window_width = self._window.winfo_width()
+        self._window_height = self._window.winfo_height()
         self._frame: tk.Frame = frame
         self._canvas: tk.Canvas = canvas
         self._services: Service = Service()
         self._team_id: int = int(os.getenv('TEAM_ID', 0))
         self._state: State = State.WAITING
-        self._craftsman: CraftsManA = None
+        self._craftsman: CraftsmanA = None
         self._new_action: GameActionsReq.ChildAction = GameActionsReq.ChildAction(action=ActionType.MOVE,
                                                                                   action_param=MoveType.LEFT,
                                                                                   crafts_man_id="1")
@@ -31,72 +34,82 @@ class MapController:
         self._move_button: tk.Button = None
         self._build_button: tk.Button = None
         self._destroy_button: tk.Button = None
-
         self._pull_map_button: tk.Button = tk.Button(frame, text="Create Map", command=self.create_map)
-        self._pull_map_button.place(x=INIT_WIDTH - INFO_BOARD_WIDTH, y=0)
-        self._pull_map_button.pack()
-
         self._side: Side = Side.A
         self._side_text: tk.Label = tk.Label(self._frame, text="Side: A", font=("Arial", 12))
-        self._side_text.place(x=INIT_WIDTH-INFO_BOARD_WIDTH, y=50)
-        self._side_text.pack()
-
         self._turn: int = 1
         self._turn_text: tk.Label = tk.Label(self._frame, text=f"Turn: {self._turn}", font=("Arial", 12))
-        self._turn_text.place(x=INIT_WIDTH-INFO_BOARD_WIDTH, y=100)
-        self._turn_text.pack()
-
         self._time_remain: int = 30
         self._time_remain_text: tk.Label = tk.Label(self._frame, text=f"Time remaining: {self._time_remain}",
                                                     font=("Arial", 12))
-        self._time_remain_text.place(x=INIT_WIDTH-INFO_BOARD_WIDTH, y=150)
-        self._time_remain_text.pack()
-
         self._request_data: GameActionsReq = GameActionsReq(turn=1, actions=[])
         self._request_data_text: tk.Text = tk.Text(self._frame, font=("Courier New", 10), width=100, height=15)
-        self._request_data_text.place(x=INIT_WIDTH - INFO_BOARD_WIDTH, y=200)
-        self._request_data_text.pack()
-
         self._send_request_button: tk.Button = tk.Button(frame, text="Send data", command=self.send_data)
-        self._send_request_button.place(x=INIT_WIDTH - INFO_BOARD_WIDTH, y=550)
-        self._send_request_button.pack()
-
         self._response_text: tk.Label = tk.Label(self._frame, text="Response", font=("Arial", 12))
-        self._response_text.place(x=INIT_WIDTH-INFO_BOARD_WIDTH, y=600)
-        self._response_text.pack()
-
         self._point_text: tk.Label = tk.Label(self._frame, text="A:0 B:0", font=("Arial", 12))
-        self._point_text.place(x=INIT_WIDTH - INFO_BOARD_WIDTH, y=650)
+        self._my_map: Map = None
+
+    def display_map(self):
+        self._my_map.display()
+        self._frame.config(width=self._window_width, height=self._window_height)
+        self._canvas.config(width=self._window_width-INFO_BOARD_WIDTH, height=self._window_height)
+        self._side_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=50)
+        self._side_text.pack()
+        self._pull_map_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=0)
+        self._pull_map_button.pack()
+        self._turn_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=100)
+        self._turn_text.pack()
+        self._time_remain_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=150)
+        self._time_remain_text.pack()
+        self._request_data_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=200)
+        self._request_data_text.pack()
+        self._send_request_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=550)
+        self._send_request_button.pack()
+        self._response_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=600)
+        self._response_text.pack()
+        self._point_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=650)
         self._point_text.pack()
 
-        self._my_map: Map = None
-        self.init_map()
-
-    def init_map(self):
+    def init_map(self, json_data: dict):
+        data = GameResp(**json_data)
         window_width = INIT_WIDTH
         window_height = INIT_HEIGHT
-        grid_width = 25
-        grid_height = 25
 
         self._frame.config(width=window_width, height=window_height)
         self._canvas.config(width=window_width-INFO_BOARD_WIDTH, height=window_height)
 
-        self._my_map = Map(canvas=self._canvas, width=grid_width, height=grid_height)
-        self._my_map.init_map(data=GameResp(), window_width=window_width-INFO_BOARD_WIDTH, window_height=window_height)
+        self._my_map = Map(canvas=self._canvas,
+                           number_of_cells_in_width=data.field.width,
+                           number_of_cells_in_height=data.field.height,
+                           map_width=window_width-INFO_BOARD_WIDTH,
+                           map_height=window_height
+                           )
+        self._my_map.init_map(data=data)
 
     def resize(self):
-        window_width = self._window.winfo_width()
-        window_height = self._window.winfo_height()
+        if not self.check_if_need_to_resize():
+            return
+        self._window_width = self._window.winfo_width()
+        self._window_height = self._window.winfo_height()
+        self._frame.config(width=self._window_width, height=self._window_height)
+        self._canvas.config(width=self._window_width-INFO_BOARD_WIDTH, height=self._window_height)
         if self._my_map:
-            self._my_map.resize(window_width=window_width-INFO_BOARD_WIDTH, window_height=window_height)
-        self._pull_map_button.place(x=window_width - INFO_BOARD_WIDTH, y=0)
-        self._turn_text.place(x=window_width-INFO_BOARD_WIDTH, y=50)
-        self._side_text.place(x=window_width-INFO_BOARD_WIDTH, y=100)
-        self._time_remain_text.place(x=window_width-INFO_BOARD_WIDTH, y=150)
-        self._request_data_text.place(x=window_width-INFO_BOARD_WIDTH, y=200)
-        self._send_request_button.place(x=window_width-INFO_BOARD_WIDTH, y=550)
-        self._response_text.place(x=window_width-INFO_BOARD_WIDTH, y=600)
-        self._point_text.place(x=window_width - INFO_BOARD_WIDTH, y=650)
+            self._my_map.resize(map_width=self._window_width-INFO_BOARD_WIDTH, map_height=self._window_height)
+        self._pull_map_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=0)
+        self._turn_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=50)
+        self._side_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=100)
+        self._time_remain_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=150)
+        self._request_data_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=200)
+        self._send_request_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=550)
+        self._response_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=600)
+        self._point_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=650)
+
+    def check_if_need_to_resize(self):
+        new_window_width = self._window.winfo_width()
+        new_window_height = self._window.winfo_height()
+        if self._window_width != new_window_width or self._window_height != new_window_height:
+            return True
+        return False
 
     def create_map(self):
         data = self._services.get_game_with_game_id()

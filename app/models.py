@@ -4,8 +4,8 @@ from typing import Optional, List, Union
 
 from pydantic import BaseModel, root_validator
 
-from app import helpers
-from app.helpers import ActionType, MoveType, BuildAndDestroyType
+from app.helpers import enums
+from app.helpers.enums import ActionType, MoveType, BuildAndDestroyType
 
 
 class GameActionsReq(BaseModel):
@@ -39,7 +39,7 @@ class GameActionsResp(BaseModel):
 class GameResp(BaseModel):
 
     class Side(BaseModel):
-        side: Optional[helpers.Side]
+        side: Optional[enums.Side]
         team_name: Optional[str]
         team_id: Optional[int]
         game_id: Optional[int]
@@ -54,7 +54,7 @@ class GameResp(BaseModel):
         class CraftsMenResp(BaseModel):
             x: Optional[int]
             y: Optional[int]
-            side: Optional[helpers.Side]
+            side: Optional[enums.Side]
             id: Optional[str]
 
         class PondResp(BaseModel):
@@ -68,13 +68,15 @@ class GameResp(BaseModel):
         id: Optional[int]
         width: Optional[int]
         height: Optional[int]
-        ponds: Optional[str]
+        ponds: Optional[Union[List[PondResp], str]]
         castles: Optional[Union[List[CastleResp], str]]
         craftsmen: Optional[Union[List[CraftsMenResp], str]]
         match_id: Optional[int]
 
         @root_validator()
         def validate_data(cls, data):
+            if len(data.get("craftsmen")) > 0 and type(data.get("craftsmen")[0]) is cls.CraftsMenResp:
+                return data
             castles = json.loads(data.get("castles"))
             craftsmen = json.loads(data.get("craftsmen"))
             ponds = json.loads(data.get("ponds"))
