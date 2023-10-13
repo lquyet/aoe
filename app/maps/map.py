@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from app.helpers.enums import Side, ActionType
 from app.helpers.utils import new_position_from_direction, MAPPING_BUILD_AND_DESTROY_TYPE_TO_DIRECTION, \
-    MAPPING_MOVE_TYPE_TO_DIRECTION
+    MAPPING_MOVE_TYPE_TO_DIRECTION, convert_child_action_req_to_next_action
 from app.models import GameResp, GameActionsResp
 from app.objects import AbstractObject, Neutral, Position, Castle, CraftsmanA, CraftsmanB, Pond, \
     AbstractCraftsman, WallA, WallB
@@ -95,31 +95,38 @@ class Map:
                 self.craftsmen.append(CraftsmanB(position=Position(x=craftsman.x, y=craftsman.y),
                                                  craftsman_id=craftsman.id))
 
-    def change_map_component_from_actions_response(self, child_action: GameActionsResp.ChildAction):
+    def change_map_component_from_actions_response(self, list_actions: list[GameActionsResp.ChildAction]):
+        destroy_actions = [action for action in list_actions if action.action == ActionType.DESTROY]
+        build_actions = [action for action in list_actions if action.action == ActionType.BUILD]
+        move_actions = [action for action in list_actions if action.action == ActionType.MOVE]
+        destroy_actions = self.clean_list_actions(destroy_actions)
+        build_actions = self.clean_list_actions(build_actions)
+        move_actions = self.clean_list_actions(move_actions)
+        for action in destroy_actions:
+            self.change_map_component_from_action(child_action=action)
+        for action in build_actions:
+            self.change_map_component_from_action(child_action=action)
+        for action in move_actions:
+            self.change_map_component_from_action(child_action=action)
+        self.update_territory_status()
+
+    def clean_list_actions(self, list_actions: list[GameActionsResp.ChildAction]) -> list[GameActionsResp.ChildAction]:
+        m = {}
+        r = []
+        for action in list_actions:
+            m[action.craftsman_id] = action
+
+        t = dict(sorted(m.items()))
+
+        for key in t.keys():
+            r.append(t[key])
+        return r
+
+    def change_map_component_from_action(self, child_action: GameActionsResp.ChildAction):
         for craftsman in self.craftsmen:
             if craftsman.craftsman_id == child_action.craftsman_id:
-                if child_action.action == ActionType.MOVE:
-                    move_pos = new_position_from_direction(
-                        current_pos=craftsman.position,
-                        direction=MAPPING_MOVE_TYPE_TO_DIRECTION.get(child_action.action_param)
-                    )
-                    self.handle_move_action(craftsman=craftsman, move_pos=move_pos)
-                if child_action.action == ActionType.BUILD:
-                    build_pos = new_position_from_direction(
-                        current_pos=craftsman.position,
-                        direction=MAPPING_BUILD_AND_DESTROY_TYPE_TO_DIRECTION.get(child_action.action_param)
-                    )
-                    self.handle_build_action(craftsman=craftsman, valid_build_pos=build_pos)
-                if child_action.action == ActionType.DESTROY:
-                    destroy_pos = new_position_from_direction(
-                        current_pos=craftsman.position,
-                        direction=MAPPING_BUILD_AND_DESTROY_TYPE_TO_DIRECTION.get(child_action.action_param)
-                    )
-                    self.handle_destroy_action(craftsman=craftsman, destroy_pos=destroy_pos)
-
-    def handle_move_action(self, craftsman: AbstractCraftsman, valid_move_pos: Position):
-        craftsman.position = valid_move_pos
-        craftsman.raise_rectangle(canvas=self._canvas)
+                next_action = convert_child_action_req_to_next_action(craftsman=craftsman, action=child_action)
+                self.handle_action(next_action)
 
     def handle_action(self, next_action: NextAction):
         if next_action.action_type == ActionType.MOVE:
@@ -129,7 +136,14 @@ class Map:
         if next_action.action_type == ActionType.DESTROY:
             self.handle_destroy_action(valid_destroy_pos=next_action.position)
 
+    def handle_move_action(self, craftsman: AbstractCraftsman, valid_move_pos: Position):
+        craftsman.position = valid_move_pos
+        craftsman.raise_rectangle(canvas=self._canvas)
+
     def handle_build_action(self, craftsman: AbstractCraftsman, valid_build_pos: Position):
+        type_of_valid_build_pos = type(self._cells[valid_build_pos.x][valid_build_pos.y])
+        if type_of_valid_build_pos in [WallA, WallB, Castle]:
+            return
         if type(craftsman) is CraftsmanA:
             self._cells[valid_build_pos.x][valid_build_pos.y] = WallA(position=valid_build_pos)
         else:
@@ -262,7 +276,7 @@ class Map:
         point_a = 0
         point_b = 0
 
-        for row in self._point:
+        for row in self._cells:
             for square in row:
                 if type(square) is WallA:
                     point_a += self._wall_point
@@ -282,36 +296,36 @@ class Map:
         return point_a, point_b
 
     def update_territory_status(self):
-        for row in self._point:
-            for square in row:
-                is_close_territory_a = self.check_if_pos_is_close_territory(square.position, side=Side.A)
-                is_close_territory_b = self.check_if_pos_is_close_territory(square.position, side=Side.B)
+        for cell_row in self._cells:
+            for cell in cell_row:
+                is_close_territory_a = self.check_if_pos_is_close_territory(cell.position, side=Side.A)
+                is_close_territory_b = self.check_if_pos_is_close_territory(cell.position, side=Side.B)
                 if is_close_territory_a and is_close_territory_b:
-                    square.is_close_territory_a = True
-                    square.is_close_territory_b = True
-                    square.is_open_territory_a = False
-                    square.is_open_territory_b = False
+                    cell.is_close_territory_a = True
+                    cell.is_close_territory_b = True
+                    cell.is_open_territory_a = False
+                    cell.is_open_territory_b = False
                 elif is_close_territory_a:
-                    square.is_close_territory_a = True
-                    square.is_close_territory_b = False
-                    square.is_open_territory_a = False
-                    square.is_open_territory_b = False
+                    cell.is_close_territory_a = True
+                    cell.is_close_territory_b = False
+                    cell.is_open_territory_a = False
+                    cell.is_open_territory_b = False
                 elif is_close_territory_b:
-                    square.is_close_territory_a = False
-                    square.is_close_territory_b = True
-                    square.is_open_territory_a = False
-                    square.is_open_territory_b = False
+                    cell.is_close_territory_a = False
+                    cell.is_close_territory_b = True
+                    cell.is_open_territory_a = False
+                    cell.is_open_territory_b = False
                 else:
-                    if square.is_close_territory_a:
-                        square.is_close_territory_a = False
-                        square.is_close_territory_b = False
-                        square.is_open_territory_a = True
-                        square.is_open_territory_b = False
-                    if square.is_close_territory_b:
-                        square.is_close_territory_a = False
-                        square.is_close_territory_b = False
-                        square.is_open_territory_a = False
-                        square.is_open_territory_b = True
+                    if cell.is_close_territory_a:
+                        cell.is_close_territory_a = False
+                        cell.is_close_territory_b = False
+                        cell.is_open_territory_a = True
+                        cell.is_open_territory_b = False
+                    if cell.is_close_territory_b:
+                        cell.is_close_territory_a = False
+                        cell.is_close_territory_b = False
+                        cell.is_open_territory_a = False
+                        cell.is_open_territory_b = True
 
     def check_if_pos_is_close_territory(self, pos: Position, side: Side):
         if type(pos) is WallA and side == Side.A:

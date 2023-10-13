@@ -1,13 +1,9 @@
-import time
-import tkinter as tk
-from typing import List
-
 from app.helpers.constants import INIT_WIDTH, INIT_HEIGHT, INFO_BOARD_WIDTH
 from app.helpers.enums import ActionType, Side
-from app.helpers.utils import new_position_from_direction, DIRECTION_CAN_BUILD_AND_DESTROY
+from app.helpers.utils import new_position_from_direction, DIRECTION_CAN_BUILD_AND_DESTROY, \
+    convert_next_action_to_child_action_req
 from app.map_controller import MapController
 from app.maps.map_alg_1 import CustomMapForAlg1
-from app.maps.map import Map
 from app.models import GameResp
 from app.objects import AbstractCraftsman, CraftsmanA, CraftsmanB
 from app.schemas import NextAction
@@ -21,36 +17,35 @@ class PlayerAlgorithm1(MapController):
         Nếu không có Castle, chọn ngẫu nhiên một ô (không nằm trong territory) có thể tới được
     """
     _my_map: CustomMapForAlg1
-    _my_craftsmen: List[AbstractCraftsman]
 
-    def __init__(self, window: tk.Tk, frame: tk.Frame, canvas: tk.Canvas, side: Side):
-        super().__init__(window=window, frame=frame, canvas=canvas)
-        self._side = side
-
-    def init_map(self, json_data: dict):
-        data = GameResp(**json_data)
+    def init_map(self, data: GameResp):
         window_width = INIT_WIDTH
         window_height = INIT_HEIGHT
 
-        self._frame.config(width=window_width, height=window_height)
-        self._canvas.config(width=window_width - INFO_BOARD_WIDTH, height=window_height)
+        if self._frame:
+            self._frame.config(width=window_width, height=window_height)
+        if self._canvas:
+            self._canvas.config(width=window_width - INFO_BOARD_WIDTH, height=window_height)
 
         self._my_map = CustomMapForAlg1(canvas=self._canvas,
                                         number_of_cells_in_width=data.field.width,
                                         number_of_cells_in_height=data.field.height,
-                                        map_width=window_width - INFO_BOARD_WIDTH,
+                                        map_width=window_width-INFO_BOARD_WIDTH,
                                         map_height=window_height)
         self._my_map.init_map(data=data)
         my_type_of_craftsmen = CraftsmanA if self._side is Side.A else CraftsmanB
         self._my_craftsmen = [craftsman for craftsman in self._my_map.craftsmen
                               if type(craftsman) is my_type_of_craftsmen]
 
-    def play(self):
+    def think(self):
+        self._request_data.actions = []
         next_actions = []
         for craftsman in self._my_craftsmen:
             next_actions.append(self.get_next_action_for_craftsman(craftsman=craftsman))
         for action in next_actions:
-            self._my_map.handle_action(next_action=action)
+            self._request_data.actions.append(
+                convert_next_action_to_child_action_req(action=action)
+            )
 
     def get_next_action_for_craftsman(self, craftsman: AbstractCraftsman) -> NextAction:
         for direction in DIRECTION_CAN_BUILD_AND_DESTROY:

@@ -15,3 +15,6 @@ class Color:
 
 
 colors = Color
+
+CURRENT_TURN = "current_turn"
+ACTIONS_LIST = "actions_list"

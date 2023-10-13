@@ -3,7 +3,8 @@ import os
 import requests
 from dotenv import load_dotenv
 
-from models import GameActionsReq, GameActionsResp, GameActionsStatusResp, GameStatusResp, GameResp
+from app.config import settings
+from models import GameActionsReq, GameActionsResp, GameStatusResp, GameResp
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ''))
 load_dotenv(os.path.join(BASE_DIR, '../.env'))
@@ -12,9 +13,9 @@ load_dotenv(os.path.join(BASE_DIR, '../.env'))
 class Service:
 
     def __init__(self):
-        self._game_id = os.getenv('GAME_ID', 0)
-        self._url = os.getenv('URL', '')
-        self._token = os.getenv('TOKEN', '')
+        self._game_id = settings.GAME_ID
+        self._url = settings.URL
+        self._token = settings.TOKEN
         self._headers = {
             'Content-Type': 'application/json',
             'Authorization': self._token

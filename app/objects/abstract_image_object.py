@@ -31,9 +31,9 @@ class AbstractImageObject(AbstractObject):
         y1 = self.position.y * rect_height
         x2 = x1 + rect_width
         y2 = y1 + rect_height
-
-        image = Image.open(self.image_path)
-        resized_image = image.resize((int(x2-x1), int(y2-y1)))
-        self.image = ImageTk.PhotoImage(resized_image)
-        canvas.itemconfig(self.rectangle, image=self.image)
-        canvas.coords(self.rectangle, x1, y1)
+        if canvas:
+            image = Image.open(self.image_path)
+            resized_image = image.resize((int(x2-x1), int(y2-y1)))
+            self.image = ImageTk.PhotoImage(resized_image)
+            canvas.itemconfig(self.rectangle, image=self.image)
+            canvas.coords(self.rectangle, x1, y1)

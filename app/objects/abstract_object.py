@@ -27,7 +27,8 @@ class AbstractObject:
             self.rectangle = None
 
     def raise_rectangle(self, canvas: tk.Canvas):
-        canvas.tag_raise(self.rectangle)
+        if canvas:
+            canvas.tag_raise(self.rectangle)
 
     def display(self, rect_width: int, rect_height: int, canvas: tk.Canvas):
         pass

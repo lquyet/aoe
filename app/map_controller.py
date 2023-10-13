@@ -1,138 +1,86 @@
 import copy
 import json
-import os
 import time
 import tkinter as tk
 from typing import List
 
-from app.helpers.enums import State, Side, ActionType, MoveType
 from app.helpers.constants import INIT_WIDTH, INFO_BOARD_WIDTH, INIT_HEIGHT
+from app.helpers.enums import Side, ActionType, MoveType
 from app.maps.map import Map
-from app.helpers.utils import mapping_from_key_list_to_action_type
-from app.objects import CraftsmanA
+from app.mock.mock_service import MockService
+from app.objects import CraftsmanA, CraftsmanB, AbstractCraftsman
 from models import GameActionsReq, GameResp, GameActionsResp
 from services import Service
 
 
 class MapController:
 
-    def __init__(self, window: tk.Tk, frame: tk.Frame, canvas: tk.Canvas):
+    def __init__(self, window: tk.Tk, frame: tk.Frame, canvas: tk.Canvas, team_id: int):
         self._window: tk.Tk = window
-        self._window_width = self._window.winfo_width()
-        self._window_height = self._window.winfo_height()
+        self._window_width = self._window.winfo_width() if self._window else None
+        self._window_height = self._window.winfo_height() if self._window_width else None
         self._frame: tk.Frame = frame
         self._canvas: tk.Canvas = canvas
-        self._services: Service = Service()
-        self._team_id: int = int(os.getenv('TEAM_ID', 0))
-        self._state: State = State.WAITING
-        self._craftsman: CraftsmanA = None
+
+        self._services: Service = MockService(team_id=team_id)
+
+        self._team_id: int = team_id
+
         self._new_action: GameActionsReq.ChildAction = GameActionsReq.ChildAction(action=ActionType.MOVE,
                                                                                   action_param=MoveType.LEFT,
                                                                                   crafts_man_id="1")
-        self._key_press_list = []
-        self._stay_button: tk.Button = None
-        self._move_button: tk.Button = None
-        self._build_button: tk.Button = None
-        self._destroy_button: tk.Button = None
-        self._pull_map_button: tk.Button = tk.Button(frame, text="Create Map", command=self.create_map)
         self._side: Side = Side.A
         self._side_text: tk.Label = tk.Label(self._frame, text="Side: A", font=("Arial", 12))
-        self._turn: int = 1
-        self._turn_text: tk.Label = tk.Label(self._frame, text=f"Turn: {self._turn}", font=("Arial", 12))
+
+        self._cur_turn: int = 0
+        self._cur_turn_text: tk.Label = tk.Label(self._frame, text=f"Turn: {self._cur_turn}", font=("Arial", 12))
+
+        self._my_next_turn: int = 0
+        self._my_next_turn_text: tk.Label = tk.Label(self._frame, text=f"Turn: {self._cur_turn}", font=("Arial", 12))
+
         self._time_remain: int = 30
         self._time_remain_text: tk.Label = tk.Label(self._frame, text=f"Time remaining: {self._time_remain}",
                                                     font=("Arial", 12))
+
         self._request_data: GameActionsReq = GameActionsReq(turn=1, actions=[])
         self._request_data_text: tk.Text = tk.Text(self._frame, font=("Courier New", 10), width=100, height=15)
+
         self._send_request_button: tk.Button = tk.Button(frame, text="Send data", command=self.send_data)
+
+        self._is_send_data = False
+
         self._response_text: tk.Label = tk.Label(self._frame, text="Response", font=("Arial", 12))
+
         self._point_text: tk.Label = tk.Label(self._frame, text="A:0 B:0", font=("Arial", 12))
+
         self._my_map: Map = None
 
-    def display_map(self):
-        self._my_map.display()
-        self._frame.config(width=self._window_width, height=self._window_height)
-        self._canvas.config(width=self._window_width-INFO_BOARD_WIDTH, height=self._window_height)
-        self._side_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=50)
-        self._side_text.pack()
-        self._pull_map_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=0)
-        self._pull_map_button.pack()
-        self._turn_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=100)
-        self._turn_text.pack()
-        self._time_remain_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=150)
-        self._time_remain_text.pack()
-        self._request_data_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=200)
-        self._request_data_text.pack()
-        self._send_request_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=550)
-        self._send_request_button.pack()
-        self._response_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=600)
-        self._response_text.pack()
-        self._point_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=650)
-        self._point_text.pack()
-
-    def init_map(self, json_data: dict):
-        data = GameResp(**json_data)
-        window_width = INIT_WIDTH
-        window_height = INIT_HEIGHT
-
-        self._frame.config(width=window_width, height=window_height)
-        self._canvas.config(width=window_width-INFO_BOARD_WIDTH, height=window_height)
-
-        self._my_map = Map(canvas=self._canvas,
-                           number_of_cells_in_width=data.field.width,
-                           number_of_cells_in_height=data.field.height,
-                           map_width=window_width-INFO_BOARD_WIDTH,
-                           map_height=window_height
-                           )
-        self._my_map.init_map(data=data)
-
-    def resize(self):
-        if not self.check_if_need_to_resize():
-            return
-        self._window_width = self._window.winfo_width()
-        self._window_height = self._window.winfo_height()
-        self._frame.config(width=self._window_width, height=self._window_height)
-        self._canvas.config(width=self._window_width-INFO_BOARD_WIDTH, height=self._window_height)
-        if self._my_map:
-            self._my_map.resize(map_width=self._window_width-INFO_BOARD_WIDTH, map_height=self._window_height)
-        self._pull_map_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=0)
-        self._turn_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=50)
-        self._side_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=100)
-        self._time_remain_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=150)
-        self._request_data_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=200)
-        self._send_request_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=550)
-        self._response_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=600)
-        self._point_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=650)
-
-    def check_if_need_to_resize(self):
-        new_window_width = self._window.winfo_width()
-        new_window_height = self._window.winfo_height()
-        if self._window_width != new_window_width or self._window_height != new_window_height:
-            return True
-        return False
+        self._my_craftsmen: list[AbstractCraftsman] = []
 
     def create_map(self):
         data = self._services.get_game_with_game_id()
         list_actions = self._services.get_game_actions_with_game_id()
-        status_data = None
+        status_data = self._services.get_game_status_with_game_id()
         should_retry = True
         while should_retry:
-            status_data = self._services.get_game_status_with_game_id()
             if status_data.cur_turn is None and status_data.max_turn is None and status_data.remaining is None:
                 time.sleep(0.5)
                 print("retry")
                 continue
             should_retry = False
 
-        self._turn = status_data.cur_turn
-        self._turn_text.config(text=f"Turn: {str(self._turn)}")
-        self.configure_turn_in_request_data()
-
-        self.create_map_from_server(data=data, list_actions=list_actions)
         for side in data.sides:
             if side.team_id == self._team_id:
                 self._side = side.side
         self._side_text.config(text=f"Side: {self._side}")
+
+        self._cur_turn = status_data.cur_turn
+        self._cur_turn_text.config(text=f"Turn: {str(self._cur_turn)}")
+        self.configure_my_next_turn()
+        self._request_data.turn = self._my_next_turn
+
+        self.create_map_from_server(data=data, list_actions=list_actions)
+
         (point_a, point_b) = self._my_map.calculate_point()
         self._point_text.config(text=f"A:{point_a} B:{point_b}")
 
@@ -141,16 +89,27 @@ class MapController:
         self._request_data_text.delete("1.0", tk.END)
         self._request_data_text.insert(tk.END, pretty_json)
         self._time_remain = status_data.remaining
-        self._state = State.WAITING
-        if self._move_button:
-            self._move_button.destroy()
-        if self._build_button:
-            self._build_button.destroy()
-        if self._destroy_button:
-            self._destroy_button.destroy()
-        self.start()
 
-    def clean(self, list_actions: list[GameActionsResp]) -> list[GameActionsResp]:
+    def configure_my_next_turn(self):
+        self._my_next_turn = self._cur_turn + 1
+        if self._side is Side.A and self._my_next_turn % 2 == 1:
+            self._my_next_turn += 1
+        if self._side is Side.B and self._my_next_turn % 2 == 0:
+            self._my_next_turn += 1
+
+    def create_map_from_server(self, data: GameResp, list_actions: List[GameActionsResp]):
+        if self._my_map:
+            self._my_map.delete()
+        self.init_map(data)
+
+        list_actions = self.clean_list_game_action_resp(list_actions)
+
+        for i in range(0, len(list_actions)):
+            if self._cur_turn >= list_actions[i].turn and i == len(list_actions) - 1 or \
+                    self._cur_turn >= list_actions[i].turn != list_actions[i + 1].turn:
+                self._my_map.change_map_component_from_actions_response(list_actions=list_actions[i].actions)
+
+    def clean_list_game_action_resp(self, list_actions: list[GameActionsResp]) -> list[GameActionsResp]:
         m = {}
         r = []
         for action in list_actions:
@@ -162,44 +121,96 @@ class MapController:
             r.append(t[key])
         return r
 
-    def create_map_from_server(self, data: GameResp, list_actions: List[GameActionsResp]):
-        window_width = self._window.winfo_width()
-        window_height = self._window.winfo_height()
-        grid_width = data.field.width
-        grid_height = data.field.height
+    def init_map(self, data: GameResp):
+        window_width = INIT_WIDTH
+        window_height = INIT_HEIGHT
 
-        self._frame.config(width=window_width, height=window_height)
-        self._canvas.config(width=window_width-INFO_BOARD_WIDTH, height=window_height)
+        if self._frame:
+            self._frame.config(width=window_width, height=window_height)
+        if self._canvas:
+            self._canvas.config(width=window_width - INFO_BOARD_WIDTH, height=window_height)
 
+        self._my_map = Map(canvas=self._canvas,
+                           number_of_cells_in_width=data.field.width,
+                           number_of_cells_in_height=data.field.height,
+                           map_width=window_width-INFO_BOARD_WIDTH,
+                           map_height=window_height
+                           )
+        self._my_map.init_map(data=data)
+        my_type_of_craftsmen = CraftsmanA if self._side is Side.A else CraftsmanB
+        self._my_craftsmen = [craftsman for craftsman in self._my_map.craftsmen
+                              if type(craftsman) is my_type_of_craftsmen]
+
+    def display_map(self):
+        self._my_map.display()
+        self._frame.config(width=self._window_width, height=self._window_height)
+        self._canvas.config(width=self._window_width-INFO_BOARD_WIDTH, height=self._window_height)
+        self._side_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=50)
+        self._side_text.pack()
+        self._cur_turn_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=100)
+        self._cur_turn_text.pack()
+        self._my_next_turn_text.place(x=self._window_width-INFO_BOARD_WIDTH+50, y=100)
+        self._my_next_turn_text.pack()
+        self._time_remain_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=150)
+        self._time_remain_text.pack()
+        self._request_data_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=200)
+        self._request_data_text.pack()
+        self._send_request_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=550)
+        self._send_request_button.pack()
+        self._response_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=600)
+        self._response_text.pack()
+        self._point_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=650)
+        self._point_text.pack()
+
+    def resize(self):
+        self._window_width = self._window.winfo_width()
+        self._window_height = self._window.winfo_height()
+        self._frame.config(width=self._window_width, height=self._window_height)
+        self._canvas.config(width=self._window_width-INFO_BOARD_WIDTH, height=self._window_height)
         if self._my_map:
-            self._my_map.delete()
-        self._my_map = Map(canvas=self._canvas, width=grid_width, height=grid_height)
-        self._my_map.init_map(data=data, window_width=window_width, window_height=window_height)
+            self._my_map.resize(map_width=self._window_width-INFO_BOARD_WIDTH, map_height=self._window_height)
+        self._cur_turn_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=50)
+        self._my_next_turn_text.place(x=self._window_width-INFO_BOARD_WIDTH+50, y=100)
+        self._side_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=100)
+        self._time_remain_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=150)
+        self._request_data_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=200)
+        self._send_request_button.place(x=self._window_width-INFO_BOARD_WIDTH, y=550)
+        self._response_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=600)
+        self._point_text.place(x=self._window_width-INFO_BOARD_WIDTH, y=650)
 
-        list_actions = self.clean(list_actions)
+    def refresh(self) -> int:
+        if not self._is_send_data:
+            self.think()
+            self.send_data()
+            self._is_send_data = True
+        if self._time_remain is None:
+            self._time_remain_text.config(text="Time remaining: None")
+            return 1000
+        if self._time_remain >= 1:
+            self._time_remain -= 1
+            self._time_remain_text.config(text=f"Time remaining: {self._time_remain}")
+            return 1000
+        elif self._time_remain < 1:
+            status_data = self._services.get_game_status_with_game_id()
+            if self._cur_turn < status_data.cur_turn:
+                self._is_send_data = False
+                self.update_map()
+                return 200
+            else:
+                return 500
 
-        for i in range(0, len(list_actions)):
-            if self._turn >= list_actions[i].turn and i == len(list_actions) - 1 or \
-                    self._turn >= list_actions[i].turn != list_actions[i + 1].turn:
-                destroy_actions = [action for action in list_actions[i].actions if action.action == ActionType.DESTROY]
-                build_actions = [action for action in list_actions[i].actions if action.action == ActionType.BUILD]
-                move_actions = [action for action in list_actions[i].actions if action.action == ActionType.MOVE]
-                for action in destroy_actions:
-                    self._my_map.change_map_component_from_actions_response(child_action=action)
-                for action in build_actions:
-                    self._my_map.change_map_component_from_actions_response(child_action=action)
-                for action in move_actions:
-                    self._my_map.change_map_component_from_actions_response(child_action=action)
-                self._my_map.update_territory_status()
+    def think(self):
+        pass
 
     def update_map(self):
         data = self._services.get_game_with_game_id()
         list_actions = self._services.get_game_actions_with_game_id()
         status_data = self._services.get_game_status_with_game_id()
 
-        self._turn = status_data.cur_turn
-        self._turn_text.config(text=f"Turn: {str(self._turn)}")
-        self.configure_turn_in_request_data()
+        self._cur_turn = status_data.cur_turn
+        self._cur_turn_text.config(text=f"Turn: {str(self._cur_turn)}")
+        self.configure_my_next_turn()
+        self._request_data.turn = self._my_next_turn
 
         self.update_map_from_server(data=data, list_actions=list_actions)
         for side in data.sides:
@@ -213,192 +224,23 @@ class MapController:
         self._request_data_text.delete("1.0", tk.END)
         self._request_data_text.insert(tk.END, pretty_json)
         self._time_remain = status_data.remaining
-        self.start()
 
     def update_map_from_server(self, data: GameResp, list_actions: List[GameActionsResp]):
-        window_width = self._window.winfo_width()
-        window_height = self._window.winfo_height()
-        grid_width = data.field.width
-        grid_height = data.field.height
-
         if not self._my_map:
-            self._my_map = Map(canvas=self._canvas, width=grid_width, height=grid_height)
-            self._my_map.init_map(data=data, window_width=window_width, window_height=window_height)
+            self.init_map(data=data)
 
-        if (self._side is Side.A and self._turn % 2 == 0) or \
-                (self._side is Side.B and self._turn % 2 == 1):
+        if (self._side is Side.A and self._cur_turn % 2 == 0) or \
+                (self._side is Side.B and self._cur_turn % 2 == 1):
             self._my_map.reset()
-            self._request_data: GameActionsReq = GameActionsReq(turn=self._turn, actions=[])
-            self._state = State.WAITING
-            if self._stay_button:
-                self._stay_button.destroy()
-            if self._move_button:
-                self._move_button.destroy()
-            if self._build_button:
-                self._build_button.destroy()
-            if self._destroy_button:
-                self._destroy_button.destroy()
+            self._request_data: GameActionsReq = GameActionsReq(turn=self._my_next_turn, actions=[])
 
-        list_actions = self.clean(list_actions)
+        list_actions = self.clean_list_game_action_resp(list_actions)
 
         for i in range(0, len(list_actions)):
-            if (self._turn == list_actions[i].turn and i == len(list_actions) - 1) or \
-                    (self._turn == list_actions[i].turn and list_actions[i].turn != list_actions[i+1].turn):
-                destroy_actions = [action for action in list_actions[i].actions if action.action == ActionType.DESTROY]
-                build_actions = [action for action in list_actions[i].actions if action.action == ActionType.BUILD]
-                move_actions = [action for action in list_actions[i].actions if action.action == ActionType.MOVE]
-                for action in destroy_actions:
-                    self._my_map.change_map_component_from_actions_response(child_action=action)
-                for action in build_actions:
-                    self._my_map.change_map_component_from_actions_response(child_action=action)
-                for action in move_actions:
-                    self._my_map.change_map_component_from_actions_response(child_action=action)
-                self._my_map.update_territory_status()
-
-    def start(self):
-        window_width = self._window.winfo_width()
-        window_height = self._window.winfo_height()
-
-        if self._state == State.WAITING:
-            self._craftsman = self._my_map.choose_craftsman(side=self._side,
-                                                            window_width=window_width-INFO_BOARD_WIDTH,
-                                                            window_height=window_height)
-            self._new_action.craftsman_id = self._craftsman.craftsmen_id
-            if self._craftsman:
-                self._state = State.CHOOSE_ACTION
-                self.display_button_choose_action()
-
-    def display_button_choose_action(self):
-        window_width = self._window.winfo_width()
-        window_height = self._window.winfo_height()
-        display_x, display_y = self._my_map.get_actual_position(position=self._craftsman.position,
-                                                                window_width=window_width-INFO_BOARD_WIDTH,
-                                                                window_height=window_height)
-        self._stay_button = tk.Button(self._window, text="q: Stay",
-                                      font=("Comic Sans", 11), fg="#00FF00", bg="black",
-                                      command=lambda: self.display_choose_direction(action_type=ActionType.STAY))
-        self._stay_button.place(x=display_x - 100, y=display_y + 50)
-
-        self._move_button = tk.Button(self._window, text="w: Move",
-                                      font=("Comic Sans", 11), fg="#00FF00", bg="black",
-                                      command=lambda: self.display_choose_direction(action_type=ActionType.MOVE))
-        self._move_button.place(x=display_x, y=display_y + 50)
-
-        self._build_button = tk.Button(self._window, text="e: Build",
-                                       font=("Comic Sans", 11), fg="#00FF00", bg="black",
-                                       command=lambda: self.display_choose_direction(action_type=ActionType.BUILD))
-        self._build_button.place(x=display_x + 100, y=display_y + 50)
-
-        self._destroy_button = tk.Button(self._window, text="r: Destroy",
-                                         font=("Comic Sans", 11), fg="#00FF00", bg="black",
-                                         command=lambda: self.display_choose_direction(action_type=ActionType.DESTROY))
-        self._destroy_button.place(x=display_x + 200, y=display_y + 50)
-
-    def store_request(self):
-        for action in self._request_data.actions:
-            if action.craftsman_id == self._new_action.craftsman_id:
-                self._request_data.actions.remove(action)
-        self._request_data.actions.append(copy.deepcopy(self._new_action))
-
-        self.configure_turn_in_request_data()
-        data = self._request_data.dict()
-        pretty_json = json.dumps(data, indent=1)
-        self._request_data_text.delete("1.0", tk.END)
-        self._request_data_text.insert(tk.END, pretty_json)
-
-    def configure_turn_in_request_data(self):
-        self._request_data.turn = self._turn + 1
-        if self._side is Side.A and self._request_data.turn % 2 == 1:
-            self._request_data.turn += 1
-        if self._side is Side.B and self._request_data.turn % 2 == 0:
-            self._request_data.turn += 1
-
-    def display_choose_direction(self, action_type: ActionType):
-        window_width = self._window.winfo_width()
-        window_height = self._window.winfo_height()
-
-        self._stay_button.destroy()
-        self._move_button.destroy()
-        self._build_button.destroy()
-        self._destroy_button.destroy()
-
-        self._my_map.update_choose_action_on_craftsman(craftsman=self._craftsman, action_type=action_type,
-                                                       window_width=window_width-INFO_BOARD_WIDTH,
-                                                       window_height=window_height)
-
-        self._new_action.action = action_type
-        if action_type is ActionType.STAY:
-            self._new_action.action_param = None
-            self.store_request()
-            self._my_map.remove_border_of_craftsman()
-            self._my_map.update_queue(position=self._craftsman.position)
-            self._my_map.revert_neighbor_color(x=self._craftsman.position.x, y=self._craftsman.position.y)
-            self._key_press_list = []
-            self._state = State.WAITING
-            self.start()
-        else:
-            self._state = State.CHOOSE_DIRECTION
-
-
-    def update_timer(self):
-        if self._time_remain is None:
-            self._time_remain_text.config(text="Time remaining: None")
-            return
-        if self._time_remain >= 1:
-            self._time_remain_text.config(text=f"Time remaining: {self._time_remain}")
-            self._time_remain_text.after(1000, self.update_timer)
-            self._time_remain -= 1
-        elif self._time_remain < 1:
-            status_data = self._services.get_game_status_with_game_id()
-            if self._turn < status_data.cur_turn:
-                self.update_map()
-                self._time_remain_text.after(200, self.update_timer)
-            else:
-                self._time_remain_text.after(500, self.update_timer)
+            if (self._cur_turn == list_actions[i].turn and i == len(list_actions) - 1) or \
+                    (self._cur_turn == list_actions[i].turn and list_actions[i].turn != list_actions[i + 1].turn):
+                self._my_map.change_map_component_from_actions_response(list_actions=list_actions[i].actions)
 
     def send_data(self):
-        json_text = self._request_data_text.get("1.0", tk.END)
-        data = json.loads(json_text)
-        resp = self._services.post_game_actions(GameActionsReq(**data))
+        resp = self._services.post_game_actions(game_actions_req=self._request_data)
         self._response_text.config(text=str(resp))
-
-    def on_key_press(self, keysym: str):
-        accepted_key_direction = ["Left", "Right", "Up", "Down"]
-        if self._state == State.CHOOSE_DIRECTION:
-            if keysym not in self._key_press_list and keysym in accepted_key_direction and len(self._key_press_list) < 2:
-                self._key_press_list.append(keysym)
-
-    def on_key_release(self, keysym: str):
-        window_width = self._window.winfo_width()
-        window_height = self._window.winfo_height()
-        accepted_key_direction = ["Left", "Right", "Up", "Down"]
-
-        if keysym == "Return":
-            self._send_request_button.invoke()
-            return
-
-        if self._state == State.CHOOSE_ACTION:
-            if keysym == "q" and self._stay_button and self._stay_button.winfo_exists():
-                self._stay_button.invoke()
-            if keysym == "w" and self._move_button and self._move_button.winfo_exists():
-                self._move_button.invoke()
-            elif keysym == "e" and self._build_button and self._build_button.winfo_exists():
-                self._build_button.invoke()
-            elif keysym == "r" and self._destroy_button and self._destroy_button.winfo_exists():
-                self._destroy_button.invoke()
-            return
-
-        if self._state == State.CHOOSE_DIRECTION:
-            if keysym not in accepted_key_direction or self._key_press_list == []:
-                self._key_press_list = []
-                return
-            self._new_action.action_param = mapping_from_key_list_to_action_type(action=self._new_action.action,
-                                                                                 key_list=self._key_press_list)
-            self.store_request()
-            self._my_map.choose_direction(window_width=window_width-INFO_BOARD_WIDTH,
-                                          window_height=window_height, key_list=self._key_press_list)
-            self._my_map.remove_border_of_craftsman()
-            self._key_press_list = []
-            self._state = State.WAITING
-            self.start()
-            return

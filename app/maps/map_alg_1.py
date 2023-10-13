@@ -71,6 +71,7 @@ class CustomMapForAlg1(Map):
         cur_target_pos = self._mapping_from_craftsman_id_to_target.get(craftsman.craftsman_id)
         if cur_target_pos != craftsman.position and self._is_reached[cur_target_pos.x][cur_target_pos.y]:
             return cur_target_pos
+        available_castles = []
         for castle in self.castles:
             if self.check_if_pos_is_close_territory(pos=castle.position, side=Side.A):
                 continue
@@ -78,7 +79,9 @@ class CustomMapForAlg1(Map):
                 continue
             if not self._is_reached[castle.position.x][castle.position.y]:
                 continue
-            return castle.position
+            available_castles.append(castle)
+        if available_castles:
+            return random.choice(available_castles).position
         available_cells = []
         for cell_row in self._cells:
             for cell in cell_row:

@@ -1,28 +1,28 @@
 {
-  "id": 1,
+  "id": 0,
   "name": "Game 1",
   "num_of_turns": 60,
   "time_per_turn": 20,
   "start_time": "2023-01-01 00:00:00",
-  "field_id": 1,
+  "field_id": 0,
   "sides": [
     {
-      "id": 1,
-      "team_name": "YiYa",
-      "team_id": 1,
-      "game_id": 1,
+      "id": 0,
+      "team_name": "Bot 1 Alg1",
+      "team_id": 0,
+      "game_id": 0,
       "side": "A"
     },
     {
-      "id": 2,
-      "team_name": "RoboQ",
-      "team_id": 2,
-      "game_id": 1,
+      "id": 1,
+      "team_name": "Bot 2 Alg1",
+      "team_id": 1,
+      "game_id": 0,
       "side": "B"
     }
   ],
   "field": {
-    "id": 1,
+    "id": 0,
     "name": "Field 1",
     "castle_coeff": 10,
     "wall_coeff": 1,
@@ -42,12 +42,18 @@
     ],
     "craftsmen": [
       {
-        "id": 1,
+        "id": 0,
         "side": "A",
-        "x": 2,
-        "y": 5
+        "x": 3,
+        "y": 13
+      },
+      {
+        "id": 1,
+        "side": "B",
+        "x": 4,
+        "y": 3
       }
     ],
-    "match_id": 1
+    "match_id": 0
   }
 }
