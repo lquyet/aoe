@@ -1,6 +1,6 @@
-from app.helpers.enums import ActionType, MoveType, BuildAndDestroyType, Direction
+from app.helpers.enums import ActionType, MoveType, BuildAndDestroyType, Direction, Side
 from app.models import GameActionsReq
-from app.objects import Position, AbstractCraftsman
+from app.objects import Position, AbstractCraftsman, Neutral, Pond, Castle, WallA, WallB
 from app.schemas import NextAction
 
 
@@ -94,6 +94,17 @@ def convert_child_action_req_to_next_action(
         position=position
     )
     return converted_action
+
+
+def get_number_of_object(side: Side, obj):
+    mapping_from_type_object_to_number = {
+        Pond: 1,
+        WallA: 3 if side == Side.A else 2,
+        WallB: 3 if side == Side.B else 2,
+        Neutral: 4,
+        Castle: 5,
+    }
+    return mapping_from_type_object_to_number.get(type(obj))
 
 
 DIRECTION_CAN_BUILD_AND_DESTROY = [Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN]
